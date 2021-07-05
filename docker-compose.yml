@@ -1,0 +1,18 @@
+version: "3"
+
+services:
+    web:
+        #build: .
+        image: localhost:2005/claptrap-listen:latest
+        env_file:
+            - .env
+        ports:
+            - "2006:8080"
+        deploy:
+            resources:
+                limits:
+                    cpus: "0.5"
+                    memory: "128M"
+                reservations:
+                    cpus: "0.1"
+                    memory: "32M"
