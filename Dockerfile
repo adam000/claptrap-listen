@@ -1,8 +1,7 @@
 ####
 # Base Go build
 ####
-FROM golang:1.16 as build
-ENV GO111MODULE on
+FROM golang:1.17 as build
 ENV CGO_ENABLED=0
 
 # Warm up the module cache.
