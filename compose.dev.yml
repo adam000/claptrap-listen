@@ -1,0 +1,46 @@
+include:
+    - compose.yml
+
+services:
+    listener:
+        build: .
+        image: ""
+        command:
+            - --dry-run
+        environment:
+            RABBITMQ_HOST: rabbitmq
+        depends_on:
+            rabbitmq:
+                condition: service_healthy
+
+    rabbitmq:
+        image: rabbitmq:3-management-alpine
+        env_file:
+            - example.env
+        environment:
+            RABBITMQ_DEFAULT_USER: sendmail-bot
+            RABBITMQ_DEFAULT_PASS: asdf
+            RABBITMQ_DEFAULT_VHOST: mytest
+        command:
+            - /bin/sh
+            - -c
+            - |
+                rabbitmq-server &
+                rabbitmq_pid=$$!
+                until rabbitmqctl await_startup; do
+                    kill -0 $$rabbitmq_pid 2>/dev/null || exit 1
+                    sleep 1
+                done
+                rabbitmqctl add_vhost mytest || true
+                rabbitmqctl set_permissions -p mytest sendmail-bot '.*' '.*' '.*'
+                rabbitmqadmin --username sendmail-bot --password asdf --vhost mytest declare queue name=test durable=true
+                wait $$rabbitmq_pid
+        healthcheck:
+            test: ["CMD-SHELL", "rabbitmqctl list_vhosts --silent | grep -Fxq mytest && rabbitmqctl list_permissions --silent -p mytest | grep -Eq '^sendmail-bot[[:space:]]+\\.\\*' && rabbitmqctl list_queues --silent -p mytest name | grep -Fxq test"]
+            interval: 5s
+            timeout: 5s
+            retries: 20
+            start_period: 10s
+        ports:
+            - "5672:5672"
+            - "15672:15672"

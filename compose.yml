@@ -1,8 +1,5 @@
-version: "3"
-
 services:
-    web:
-        #build: .
+    listener:
         image: localhost:2005/claptrap-listen:latest
         env_file:
             - .env

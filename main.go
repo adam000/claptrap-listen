@@ -28,8 +28,7 @@ From: %s
 const usage = `claptrap-listen
 
 Usage:
-	claptrap-listen --web
-	claptrap-listen --rabbitmq
+	claptrap-listen --web|--rabbitmq [--dry-run]
 `
 
 func main() {
@@ -38,14 +37,15 @@ func main() {
 		log.Fatalf("Failed to parse args: %v", err)
 	}
 
+	dryRun, _ := arguments.Bool("--dry-run")
 	if isWeb, _ := arguments.Bool("--web"); isWeb {
-		runWebListener()
+		runWebListener(dryRun)
 	} else {
-		runRabbitMqListener()
+		runRabbitMqListener(dryRun)
 	}
 }
 
-func runRabbitMqListener() {
+func runRabbitMqListener(dryRun bool) {
 	username := os.Getenv("RABBITMQ_USERNAME")
 	password := os.Getenv("RABBITMQ_PASSWORD")
 	host := os.Getenv("RABBITMQ_HOST")
@@ -69,7 +69,7 @@ func runRabbitMqListener() {
 		log.Fatalf("Topic can't be blank; no environment variable found")
 	}
 
-	connString := fmt.Sprintf("amqp://%s:%s@%s:%s//%s", username, password, host, port, virtualHost)
+	connString := fmt.Sprintf("amqp://%s:%s@%s:%s/%s", username, password, host, port, virtualHost)
 	conn, err := amqp.Dial(connString)
 	if err != nil {
 		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
@@ -97,7 +97,7 @@ func runRabbitMqListener() {
 
 	go func() {
 		for d := range msgs {
-			sendMessage(d.Body)
+			sendMessage(d.Body, dryRun)
 		}
 	}()
 
@@ -105,28 +105,30 @@ func runRabbitMqListener() {
 	<-forever
 }
 
-func runWebListener() {
+func runWebListener(dryRun bool) {
 	r := mux.NewRouter()
 
-	r.HandleFunc("/send", mainHandler).Methods("PUT")
+	r.HandleFunc("/send", getMainHandler(dryRun)).Methods("PUT")
 
 	http.Handle("/", r)
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
-func mainHandler(w http.ResponseWriter, r *http.Request) {
-	bytes, err := io.ReadAll(r.Body)
-	if err != nil {
-		log.Printf("Failed to read body of request: %v", err)
-		// TODO I could probably handle this a little better
-		return
-	}
+func getMainHandler(dryRun bool) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		bytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			log.Printf("Failed to read body of request: %v", err)
+			// TODO I could probably handle this a little better
+			return
+		}
 
-	sendMessage(bytes)
+		sendMessage(bytes, dryRun)
+	}
 }
 
-func sendMessage(bytes []byte) {
+func sendMessage(bytes []byte, dryRun bool) {
 	message := &Message{}
 
 	if err := json.Unmarshal(bytes, message); err != nil {
@@ -146,14 +148,16 @@ func sendMessage(bytes []byte) {
 
 	// call out to msmtp
 	log.Printf("Message received: %s", output)
-	stdout, stderr, err := shell.RunInDirWithStdin(".", output, "msmtp", "adamh.zero@gmail.com")
-	if err != nil {
-		log.Printf("Error in transmission: %v", err)
-	}
-	if stdout != "" {
-		log.Printf("msmtp stdout: %s", stdout)
-	}
-	if stderr != "" {
-		log.Printf("msmtp stderr: %s", stderr)
+	if !dryRun {
+		stdout, stderr, err := shell.RunInDirWithStdin(".", output, "msmtp", "adamh.zero@gmail.com")
+		if err != nil {
+			log.Printf("Error in transmission: %v", err)
+		}
+		if stdout != "" {
+			log.Printf("msmtp stdout: %s", stdout)
+		}
+		if stderr != "" {
+			log.Printf("msmtp stderr: %s", stderr)
+		}
 	}
 }
