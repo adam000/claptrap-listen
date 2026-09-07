@@ -1,6 +1,6 @@
 module github.com/adam000/claptrap-listen
 
-go 1.16
+go 1.27
 
 require (
 	github.com/adam000/goutils v0.4.2
