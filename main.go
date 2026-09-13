@@ -20,9 +20,8 @@ type Message struct {
 	Body    string
 }
 
-const format = `Subject: %s
-
-From: %s
+const format = `From: %s
+Subject: %s
 %s`
 
 const usage = `claptrap-listen
@@ -144,7 +143,7 @@ func sendMessage(bytes []byte, dryRun bool) {
 		}
 	}
 
-	output := fmt.Sprintf(format, message.Subject, message.From, message.Body)
+	output := fmt.Sprintf(format, message.From, message.Subject, message.Body)
 
 	// call out to msmtp
 	log.Printf("Message received: %s", output)
